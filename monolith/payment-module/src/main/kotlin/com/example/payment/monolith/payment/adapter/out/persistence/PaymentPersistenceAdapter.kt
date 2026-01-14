@@ -32,6 +32,13 @@ class PaymentPersistenceAdapter(
         return paymentMapper.mapToDomainEntity(entity)
     }
 
+    @Transactional(readOnly = true)
+    override fun getPaymentByKey(paymentKey: String): PaymentEvent {
+        val entity = paymentEventJpaRepository.findByPaymentKeyWithOrders(paymentKey)
+            ?: throw IllegalArgumentException("Payment not found with key: $paymentKey")
+        return paymentMapper.mapToDomainEntity(entity)
+    }
+
     @Transactional
     override fun updatePaymentStatusToExecuting(orderId: String, paymentKey: String) {
         val entity = paymentEventJpaRepository.findByOrderIdWithOrders(orderId)

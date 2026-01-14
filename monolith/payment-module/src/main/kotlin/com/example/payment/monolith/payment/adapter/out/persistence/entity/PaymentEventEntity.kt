@@ -38,6 +38,9 @@ data class PaymentEventEntity(
     @Column(name = "is_payment_done", nullable = false)
     val isPaymentDone: Boolean = false,
 
+    @Column(name = "is_cancellation_done", nullable = false)
+    val isCancellationDone: Boolean = false,
+
     @OneToMany(
         mappedBy = "paymentEvent",
         cascade = [CascadeType.ALL],

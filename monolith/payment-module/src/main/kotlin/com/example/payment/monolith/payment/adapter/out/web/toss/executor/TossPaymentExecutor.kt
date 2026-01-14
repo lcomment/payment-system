@@ -87,4 +87,65 @@ class TossPaymentExecutor(
             )
         }
     }
+
+    fun executeCancel(paymentKey: String, cancelReason: String): PaymentCancelExecutionResult {
+        return try {
+            val response = tossPaymentWebClient.post()
+                .uri("/v1/payments/$paymentKey/cancel")
+                .header("Idempotency-Key", "$paymentKey-cancel")
+                .bodyValue("""
+                    {
+                      "cancelReason": "$cancelReason"
+                    }
+                """.trimIndent())
+                .retrieve()
+                .onStatus({ statusCode: HttpStatusCode ->
+                    statusCode.is4xxClientError || statusCode.is5xxServerError
+                }) { response ->
+                    response.bodyToMono(TossFailureResponse::class.java)
+                        .map {
+                            val error = TossPaymentError.get(it.code)
+                            throw PSPConfirmationException(
+                                errorCode = error.name,
+                                errorMessage = error.description,
+                                isSuccess = error.isSuccess(),
+                                isFailure = error.isFailure(),
+                                isUnknown = error.isUnknown(),
+                                isRetryableError = error.isRetryableError()
+                            )
+                        }
+                }
+                .bodyToMono(TossPaymentConfirmationResponse::class.java)
+                .block(Duration.ofSeconds(10))
+                ?: throw RuntimeException("Toss payment cancellation failed: empty response")
+
+            // Extract cancellation info from the cancels array
+            val cancelInfo = response.cancels?.lastOrNull()
+                ?: throw RuntimeException("Cancel information not found in PSP response")
+
+            PaymentCancelExecutionResult(
+                paymentKey = paymentKey,
+                cancelAmount = cancelInfo.cancelAmount.toLong(),
+                canceledAt = LocalDateTime.parse(cancelInfo.canceledAt, DateTimeFormatter.ISO_OFFSET_DATE_TIME),
+                cancelReason = cancelReason,
+                pspRawData = response.toString(),
+                isSuccess = true,
+                isFailure = false
+            )
+        } catch (e: PSPConfirmationException) {
+            PaymentCancelExecutionResult(
+                paymentKey = paymentKey,
+                cancelAmount = 0,
+                canceledAt = LocalDateTime.now(),
+                cancelReason = cancelReason,
+                pspRawData = "",
+                isSuccess = e.isSuccess,
+                isFailure = e.isFailure,
+                failure = PaymentFailure(
+                    errorCode = e.errorCode,
+                    message = e.errorMessage
+                )
+            )
+        }
+    }
 }

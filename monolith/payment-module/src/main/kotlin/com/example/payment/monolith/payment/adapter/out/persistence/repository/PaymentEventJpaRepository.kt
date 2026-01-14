@@ -12,4 +12,7 @@ interface PaymentEventJpaRepository : JpaRepository<PaymentEventEntity, Long> {
 
     @Query("SELECT pe FROM PaymentEventEntity pe LEFT JOIN FETCH pe.paymentOrders WHERE pe.orderId = :orderId")
     fun findByOrderIdWithOrders(orderId: String): PaymentEventEntity?
+
+    @Query("SELECT pe FROM PaymentEventEntity pe LEFT JOIN FETCH pe.paymentOrders WHERE pe.paymentKey = :paymentKey")
+    fun findByPaymentKeyWithOrders(paymentKey: String): PaymentEventEntity?
 }

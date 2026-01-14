@@ -11,6 +11,8 @@ data class PaymentOrder(
 ) {
     private var isLedgerUpdated: Boolean = false
     private var isWalletUpdated: Boolean = false
+    private var isLedgerReversed: Boolean = false
+    private var isWalletReversed: Boolean = false
 
     fun isLedgerUpdated(): Boolean = isLedgerUpdated
 
@@ -22,5 +24,17 @@ data class PaymentOrder(
 
     fun confirmLedgerUpdate() {
         isLedgerUpdated = true
+    }
+
+    fun isLedgerReversed(): Boolean = isLedgerReversed
+
+    fun isWalletReversed(): Boolean = isWalletReversed
+
+    fun confirmWalletReversal() {
+        isWalletReversed = true
+    }
+
+    fun confirmLedgerReversal() {
+        isLedgerReversed = true
     }
 }

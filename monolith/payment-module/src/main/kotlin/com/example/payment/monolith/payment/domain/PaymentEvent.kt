@@ -14,6 +14,7 @@ data class PaymentEvent(
     val paymentOrders: List<PaymentOrder> = emptyList()
 ) {
     private var isPaymentDone: Boolean = false
+    private var isCancellationDone: Boolean = false
 
     fun totalAmount(): Long {
         return paymentOrders.sumOf { it.amount }
@@ -57,5 +58,33 @@ data class PaymentEvent(
 
     private fun allPaymentOrdersDone(): Boolean {
         return paymentOrders.all { it.isWalletUpdated() && it.isLedgerUpdated() }
+    }
+
+    fun isCancellationDone(): Boolean = isCancellationDone
+
+    fun confirmWalletReversal() {
+        paymentOrders.forEach { it.confirmWalletReversal() }
+    }
+
+    fun confirmLedgerReversal() {
+        paymentOrders.forEach { it.confirmLedgerReversal() }
+    }
+
+    fun completeCancellationIfDone() {
+        if (allReversalsDone()) {
+            isCancellationDone = true
+        }
+    }
+
+    fun isLedgerReversalDone(): Boolean {
+        return paymentOrders.all { it.isLedgerReversed() }
+    }
+
+    fun isWalletReversalDone(): Boolean {
+        return paymentOrders.all { it.isWalletReversed() }
+    }
+
+    private fun allReversalsDone(): Boolean {
+        return paymentOrders.all { it.isWalletReversed() && it.isLedgerReversed() }
     }
 }

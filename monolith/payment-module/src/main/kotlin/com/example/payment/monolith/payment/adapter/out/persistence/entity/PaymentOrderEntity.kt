@@ -34,5 +34,11 @@ data class PaymentOrderEntity(
     val isLedgerUpdated: Boolean = false,
 
     @Column(name = "is_wallet_updated", nullable = false)
-    val isWalletUpdated: Boolean = false
+    val isWalletUpdated: Boolean = false,
+
+    @Column(name = "is_ledger_reversed", nullable = false)
+    val isLedgerReversed: Boolean = false,
+
+    @Column(name = "is_wallet_reversed", nullable = false)
+    val isWalletReversed: Boolean = false
 )

@@ -44,6 +44,7 @@ class PaymentMapper {
             paymentMethod = domain.paymentMethod,
             approvedAt = domain.approvedAt,
             isPaymentDone = domain.isPaymentDone(),
+            isCancellationDone = domain.isCancellationDone(),
             paymentOrders = mutableListOf()
         )
 
@@ -63,7 +64,9 @@ class PaymentMapper {
             amount = domain.amount,
             paymentStatus = domain.paymentStatus,
             isLedgerUpdated = domain.isLedgerUpdated(),
-            isWalletUpdated = domain.isWalletUpdated()
+            isWalletUpdated = domain.isWalletUpdated(),
+            isLedgerReversed = domain.isLedgerReversed(),
+            isWalletReversed = domain.isWalletReversed()
         )
     }
 }

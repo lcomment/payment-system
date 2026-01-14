@@ -1,7 +1,9 @@
 package com.example.payment.monolith.wallet.adapter.`in`.event
 
 import com.example.payment.monolith.common.idempotency.IdempotencyChecker
+import com.example.payment.monolith.payment.domain.event.PaymentCanceledEvent
 import com.example.payment.monolith.payment.domain.event.PaymentConfirmedEvent
+import com.example.payment.monolith.wallet.application.port.`in`.RefundUseCase
 import com.example.payment.monolith.wallet.application.port.`in`.SettlementUseCase
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
@@ -11,6 +13,7 @@ import org.springframework.transaction.event.TransactionalEventListener
 @Component
 class PaymentEventListener(
     private val settlementUseCase: SettlementUseCase,
+    private val refundUseCase: RefundUseCase,
     private val idempotencyChecker: IdempotencyChecker
 ) {
 
@@ -28,6 +31,25 @@ class PaymentEventListener(
 
         try {
             settlementUseCase.processSettlement(event)
+        } catch (e: Exception) {
+            throw e
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Async
+    fun onPaymentCanceled(event: PaymentCanceledEvent) {
+        val alreadyProcessed = idempotencyChecker.checkAndRecord(
+            key = "${event.eventId}-wallet-refund",
+            eventType = "PaymentCanceledEvent"
+        )
+
+        if (alreadyProcessed) {
+            return
+        }
+
+        try {
+            refundUseCase.processRefund(event)
         } catch (e: Exception) {
             throw e
         }

@@ -25,4 +25,20 @@ data class Wallet(
             }
         )
     }
+
+    fun calculateBalanceWithRefund(items: List<Item>): Wallet {
+        return copy(
+            balance = balance - BigDecimal(items.sumOf { it.amount }),
+            walletTransactions = items.map {
+                WalletTransaction(
+                    walletId = this.id,
+                    amount = it.amount,
+                    type = TransactionType.DEBIT,
+                    referenceId = it.referenceId,
+                    referenceType = it.referenceType,
+                    orderId = it.orderId
+                )
+            }
+        )
+    }
 }
