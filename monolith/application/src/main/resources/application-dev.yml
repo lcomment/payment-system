@@ -1,0 +1,36 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/payment_monolith_dev?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: password
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        show_sql: true
+        format_sql: true
+
+# PSP Configuration (Toss Payments)
+PSP:
+  toss:
+    url: https://api.tosspayments.com
+    secretKey: test_sk_dev
+
+# SQS Configuration
+cloud:
+  aws:
+    sqs:
+      enabled: false
+
+# Outbox Configuration
+outbox:
+  sqs:
+    enabled: false
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.example.payment.monolith: DEBUG

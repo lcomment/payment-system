@@ -1,0 +1,44 @@
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:payment_monolith}?useSSL=true&serverTimezone=UTC
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        show_sql: false
+        format_sql: false
+
+# PSP Configuration (Toss Payments)
+PSP:
+  toss:
+    url: https://api.tosspayments.com
+    secretKey: ${TOSS_SECRET_KEY}
+
+# SQS Configuration
+cloud:
+  aws:
+    sqs:
+      enabled: true
+      region: ${AWS_REGION:ap-northeast-2}
+    credentials:
+      access-key: ${AWS_ACCESS_KEY}
+      secret-key: ${AWS_SECRET_KEY}
+
+# Outbox Configuration
+outbox:
+  sqs:
+    enabled: true
+
+# Logging
+logging:
+  level:
+    root: WARN
+    com.example.payment.monolith: INFO
+    org.hibernate.SQL: WARN

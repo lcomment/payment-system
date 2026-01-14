@@ -23,8 +23,9 @@ import java.time.format.DateTimeFormatter
 @Component
 class TossPaymentExecutor (
   private val tossPaymentWebClient: WebClient,
-  private val uri: String = "/v1/payments/confirm"
 ) : PaymentExecutor {
+
+  private val uri: String = "/v1/payments/confirm"
 
   override fun execute(command: PaymentConfirmCommand): Mono<PaymentExecutionResult> {
     return tossPaymentWebClient.post()

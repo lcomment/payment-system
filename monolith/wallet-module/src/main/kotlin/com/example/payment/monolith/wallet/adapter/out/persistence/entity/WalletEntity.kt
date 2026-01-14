@@ -1,0 +1,26 @@
+package com.example.payment.monolith.wallet.adapter.out.persistence.entity
+
+import jakarta.persistence.*
+import java.math.BigDecimal
+
+@Entity
+@Table(name = "wallets")
+data class WalletEntity(
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    val id: Long? = null,
+
+    @Column(name = "user_id", nullable = false)
+    val userId: Long,
+
+    @Column(nullable = false)
+    val balance: BigDecimal,
+
+    @Version
+    val version: Int
+) {
+
+    fun addBalance(amount: BigDecimal): WalletEntity {
+        return copy(balance = balance + amount)
+    }
+}
