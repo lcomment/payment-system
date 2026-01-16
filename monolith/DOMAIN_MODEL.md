@@ -358,18 +358,20 @@ data class Wallet(
     val walletTransactions: List<WalletTransaction> = emptyList()
 ) {
     /**
-     * 정산 처리 (잔액 증가)
-     * @param items 정산할 주문 리스트
+     * 정산 처리 (잔액 증가 - 플랫폼 수수료 차감 후 순 금액만)
+     * @param items 정산할 주문 리스트 (이미 수수료 차감된 순 금액 포함)
      * @return 업데이트된 Wallet (불변 객체)
+     *
+     * 중요: Item.netAmount를 사용하여 수수료(3.96%) 차감 후 순 금액만 지갑에 적립
      */
     fun calculateBalanceWith(items: List<Item>): Wallet {
-        val totalAmount = items.sumOf { it.amount }
+        val totalNetAmount = items.sumOf { it.netAmount }  // 순 금액 합계
         return copy(
-            balance = balance + BigDecimal(totalAmount),
+            balance = balance + BigDecimal(totalNetAmount),
             walletTransactions = items.map {
                 WalletTransaction(
                     walletId = this.id,
-                    amount = it.amount,
+                    amount = it.netAmount,  // 순 금액 기록
                     type = TransactionType.CREDIT,  // 정산은 CREDIT (증가)
                     referenceId = it.referenceId,
                     referenceType = it.referenceType,
@@ -380,18 +382,20 @@ data class Wallet(
     }
 
     /**
-     * 환불 처리 (잔액 감소)
+     * 환불 처리 (잔액 감소 - 순 금액만 차감)
      * @param items 환불할 주문 리스트
      * @return 업데이트된 Wallet (불변 객체)
+     *
+     * 중요: 정산 시 순 금액만 받았으므로, 환불 시에도 순 금액만 차감
      */
     fun calculateBalanceWithRefund(items: List<Item>): Wallet {
-        val totalAmount = items.sumOf { it.amount }
+        val totalNetAmount = items.sumOf { it.netAmount }  // 순 금액 합계
         return copy(
-            balance = balance - BigDecimal(totalAmount),
+            balance = balance - BigDecimal(totalNetAmount),
             walletTransactions = items.map {
                 WalletTransaction(
                     walletId = this.id,
-                    amount = it.amount,
+                    amount = it.netAmount,  // 순 금액 기록
                     type = TransactionType.DEBIT,  // 환불은 DEBIT (감소)
                     referenceId = it.referenceId,
                     referenceType = it.referenceType,
@@ -453,6 +457,78 @@ enum class TransactionType {
 
 ---
 
+### 2.3 Item (Wallet용 도메인 객체)
+
+정산/환불 시 사용되는 기본 Item 클래스입니다. 플랫폼 수수료 정보를 포함합니다.
+
+#### 속성
+
+| 속성명 | 타입 | 설명 | 기본값 |
+|--------|------|------|--------|
+| `amount` | Long | 총 금액 (Gross Amount) | 필수 |
+| `feeAmount` | Long | 플랫폼 수수료 (3.96%) | 0 |
+| `netAmount` | Long | 순 금액 (amount - feeAmount) | amount |
+| `orderId` | String | 주문 ID | 필수 |
+| `referenceId` | Long | 참조 ID (PaymentOrder ID) | 필수 |
+| `referenceType` | ReferenceType | 참조 타입 | 필수 |
+
+#### 주요 메서드
+
+```kotlin
+open class Item(
+    val amount: Long,          // 총 금액 (고객이 지불한 금액)
+    val feeAmount: Long = 0,   // 플랫폼 수수료 (총 금액 × 3.96%)
+    val netAmount: Long = amount,  // 순 금액 (판매자가 받는 금액)
+    val orderId: String,
+    val referenceId: Long,
+    val referenceType: ReferenceType
+)
+
+enum class ReferenceType {
+    PAYMENT_ORDER  // 결제 주문
+}
+```
+
+#### PaymentOrder (Item 상속)
+
+Wallet 모듈에서 사용하는 결제 주문 도메인 객체입니다.
+
+```kotlin
+class PaymentOrder(
+    val id: Long,
+    val sellerId: Long,
+    amount: Long,           // 총 금액
+    feeAmount: Long,        // 수수료
+    netAmount: Long,        // 순 금액
+    orderId: String
+) : Item(
+    amount = amount,
+    feeAmount = feeAmount,
+    netAmount = netAmount,
+    orderId = orderId,
+    referenceId = id,
+    referenceType = ReferenceType.PAYMENT_ORDER
+)
+```
+
+**수수료 계산 예시**:
+```kotlin
+val grossAmount = 10000L        // 총 금액: 10,000원
+val feeAmount = 396L            // 수수료: 396원 (3.96%)
+val netAmount = 9604L           // 순 금액: 9,604원
+
+val paymentOrder = PaymentOrder(
+    id = 1L,
+    sellerId = 100L,
+    amount = grossAmount,
+    feeAmount = feeAmount,
+    netAmount = netAmount,
+    orderId = "order-123"
+)
+```
+
+---
+
 ## 3. Ledger Domain
 
 ### 3.1 DoubleLedgerEntry
@@ -469,16 +545,35 @@ enum class TransactionType {
 | `transaction` | LedgerTransaction | 거래 정보 | 필수 |
 | `createdAt` | LocalDateTime | 생성 시간 | 자동 설정 |
 
-#### 복식 부기 원칙
+#### 복식 부기 원칙 (플랫폼 수수료 포함)
+
+**결제 승인 시** (각 결제마다 2개의 엔트리 생성):
 
 ```
-결제 승인 시:
-  차변 (Debit): 매출채권 계정 (자산 증가)
-  대변 (Credit): 매출액 계정 (수익 증가)
+엔트리 1 - 판매자 정산 (순 금액, 96.04%):
+  차변 (Debit):  Customer Account (고객 계정) - 순 금액
+  대변 (Credit): Merchant Account (판매자 계정) - 순 금액
 
-결제 취소 시 (역분개):
-  차변 (Debit): 매출액 계정 (수익 감소)
-  대변 (Credit): 매출채권 계정 (자산 감소)
+엔트리 2 - 플랫폼 수수료 (3.96%):
+  차변 (Debit):  Customer Account (고객 계정) - 수수료
+  대변 (Credit): Revenue Account (수익 계정) - 수수료
+```
+
+**예시**: 10,000원 결제
+- 순 금액: 9,604원 (Customer → Merchant)
+- 수수료: 396원 (Customer → Revenue)
+- 총액: 10,000원
+
+**결제 취소 시** (역분개 - 각 결제마다 2개의 역분개 엔트리 생성):
+
+```
+역분개 엔트리 1 - 판매자 정산 취소 (순 금액):
+  차변 (Debit):  Merchant Account (판매자 계정) - 순 금액
+  대변 (Credit): Customer Account (고객 계정) - 순 금액
+
+역분개 엔트리 2 - 플랫폼 수수료 취소:
+  차변 (Debit):  Revenue Account (수익 계정) - 수수료
+  대변 (Credit): Customer Account (고객 계정) - 수수료
 ```
 
 ---
@@ -534,14 +629,109 @@ enum class AccountType {
 
 #### 주요 계정 예시
 
-| 계정 코드 | 계정명 | 타입 | 설명 |
-|----------|--------|------|------|
-| `1100` | 매출채권 | ASSET | 판매 대금을 받을 권리 |
-| `4100` | 매출액 | REVENUE | 판매로 인한 수익 |
+| ID | 계정명 | 타입 | 설명 | 용도 |
+|----|--------|------|------|------|
+| 1 | Customer Account | ASSET | 고객 계정 (매출채권) | 차변 계정 (From) |
+| 2 | Merchant Account | REVENUE | 판매자 계정 (매출액) | 대변 계정 (To) - 순 금액 |
+| 3 | Revenue Account | REVENUE | 플랫폼 수익 계정 | 대변 계정 (To) - 수수료 |
+
+**계정 매핑 규칙**:
+- **PAYMENT_ORDER** (판매자 정산): `1 (Customer) → 2 (Merchant)` - 순 금액
+- **PLATFORM_FEE** (플랫폼 수수료): `1 (Customer) → 3 (Revenue)` - 수수료
 
 ---
 
-### 3.4 LedgerTransaction
+### 3.4 FinanceType
+
+금융 거래 타입을 나타내는 열거형입니다.
+
+```kotlin
+enum class FinanceType(description: String) {
+    PAYMENT_ORDER("결제 주문"),      // 판매자 정산 (순 금액)
+    PLATFORM_FEE("플랫폼 수수료")     // 플랫폼 수수료 (3.96%)
+}
+```
+
+**사용 예시**:
+- `PAYMENT_ORDER`: 판매자에게 정산되는 순 금액 기록
+- `PLATFORM_FEE`: 플랫폼이 수취하는 수수료 기록
+
+---
+
+### 3.5 Item & PlatformFee (Ledger용 도메인 객체)
+
+Ledger 모듈에서 사용하는 기본 Item 클래스와 PlatformFee 클래스입니다.
+
+#### Item (기본 클래스)
+
+```kotlin
+open class Item(
+    val id: Long,           // 참조 ID (PaymentOrder ID)
+    val amount: Long,       // 금액 (순 금액 또는 수수료)
+    val orderId: String,
+    val type: ReferenceType  // PAYMENT_ORDER 또는 PLATFORM_FEE
+)
+
+enum class ReferenceType {
+    PAYMENT_ORDER,  // 결제 주문 (순 금액)
+    PLATFORM_FEE    // 플랫폼 수수료
+}
+```
+
+#### PaymentOrder (순 금액 엔트리)
+
+```kotlin
+class PaymentOrder(
+    id: Long,
+    amount: Long,      // 순 금액 (96.04%)
+    orderId: String
+) : Item(
+    id = id,
+    amount = amount,
+    orderId = orderId,
+    type = ReferenceType.PAYMENT_ORDER
+)
+```
+
+#### PlatformFee (수수료 엔트리)
+
+```kotlin
+class PlatformFee(
+    id: Long,          // PaymentOrder ID 참조
+    amount: Long,      // 수수료 금액 (3.96%)
+    orderId: String
+) : Item(
+    id = id,
+    amount = amount,
+    orderId = orderId,
+    type = ReferenceType.PLATFORM_FEE
+)
+```
+
+**사용 예시**:
+```kotlin
+// 10,000원 결제 처리 시
+val netAmount = 9604L       // 순 금액
+val feeAmount = 396L        // 수수료
+
+// 순 금액 엔트리 (Customer → Merchant)
+val paymentOrder = PaymentOrder(
+    id = 1L,
+    amount = netAmount,
+    orderId = "order-123"
+)
+
+// 수수료 엔트리 (Customer → Revenue)
+val platformFee = PlatformFee(
+    id = 1L,  // 동일한 PaymentOrder ID 참조
+    amount = feeAmount,
+    orderId = "order-123"
+)
+```
+
+---
+
+### 3.6 LedgerTransaction
 
 장부 거래 정보를 나타냅니다.
 
@@ -556,7 +746,7 @@ enum class AccountType {
 
 ---
 
-### 3.5 Ledger (Domain Service)
+### 3.7 Ledger (Domain Service)
 
 장부 생성 로직을 담당하는 도메인 서비스입니다.
 

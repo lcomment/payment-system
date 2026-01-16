@@ -1037,7 +1037,7 @@ spring:
   application:
     name: payment-system
   datasource:
-    url: jdbc:postgresql://payment-db.rds.amazonaws.com:5432/payment
+    url: jdbc:mysql://payment-db.rds.amazonaws.com:3306/payment
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     hikari:
@@ -1249,7 +1249,7 @@ graph TB
 - **언어**: Kotlin 1.9
 - **프레임워크**: Spring Boot 3.x
 - **ORM**: JPA (Hibernate)
-- **데이터베이스**: PostgreSQL 14
+- **데이터베이스**: MySQL 8.x
 - **메시지 큐**: Amazon SQS
 - **빌드 도구**: Gradle
 - **버전 관리**: Git

@@ -19,16 +19,32 @@ class LedgerPersistenceAdapter(
 
     @Transactional(readOnly = true)
     override fun getDoubleAccountsForLedger(financeType: FinanceType): DoubleAccountsForLedger {
-        // For payment orders: debit from customer account (1), credit to merchant account (2)
-        val fromAccount = accountJpaRepository.findById(1L)
-            .orElseThrow { IllegalArgumentException("From account not found") }
-        val toAccount = accountJpaRepository.findById(2L)
-            .orElseThrow { IllegalArgumentException("To account not found") }
+        return when (financeType) {
+            FinanceType.PAYMENT_ORDER -> {
+                // For payment orders: debit from customer account (1), credit to merchant account (2)
+                val fromAccount = accountJpaRepository.findById(1L)
+                    .orElseThrow { IllegalArgumentException("Customer account not found") }
+                val toAccount = accountJpaRepository.findById(2L)
+                    .orElseThrow { IllegalArgumentException("Merchant account not found") }
 
-        return DoubleAccountsForLedger(
-            from = Account(id = fromAccount.id!!, name = fromAccount.name),
-            to = Account(id = toAccount.id!!, name = toAccount.name)
-        )
+                DoubleAccountsForLedger(
+                    from = Account(id = fromAccount.id!!, name = fromAccount.name),
+                    to = Account(id = toAccount.id!!, name = toAccount.name)
+                )
+            }
+            FinanceType.PLATFORM_FEE -> {
+                // For platform fees: debit from customer account (1), credit to revenue account (3)
+                val fromAccount = accountJpaRepository.findById(1L)
+                    .orElseThrow { IllegalArgumentException("Customer account not found") }
+                val toAccount = accountJpaRepository.findById(3L)
+                    .orElseThrow { IllegalArgumentException("Revenue account not found") }
+
+                DoubleAccountsForLedger(
+                    from = Account(id = fromAccount.id!!, name = fromAccount.name),
+                    to = Account(id = toAccount.id!!, name = toAccount.name)
+                )
+            }
+        }
     }
 
     @Transactional

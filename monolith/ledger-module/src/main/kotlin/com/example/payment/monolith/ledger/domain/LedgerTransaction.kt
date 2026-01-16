@@ -7,5 +7,6 @@ data class LedgerTransaction(
 )
 
 enum class ReferenceType {
-    PAYMENT_ORDER
+    PAYMENT_ORDER,
+    PLATFORM_FEE
 }

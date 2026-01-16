@@ -6,12 +6,12 @@ import com.example.payment.monolith.common.outbox.OutboxPublisher
 import com.example.payment.monolith.ledger.application.port.`in`.DoubleLedgerEntryRecordUseCase
 import com.example.payment.monolith.ledger.application.port.out.LoadAccountPort
 import com.example.payment.monolith.ledger.application.port.out.SaveDoubleLedgerEntryPort
-import com.example.payment.monolith.ledger.domain.FinanceType
-import com.example.payment.monolith.ledger.domain.Ledger
-import com.example.payment.monolith.ledger.domain.PaymentOrder
+import com.example.payment.monolith.ledger.domain.*
 import com.example.payment.monolith.ledger.domain.event.LedgerRecordedEvent
 import com.example.payment.monolith.payment.domain.event.PaymentConfirmedEvent
 import org.springframework.transaction.annotation.Transactional
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.LocalDateTime
 import java.util.*
 
@@ -23,22 +23,46 @@ class DoubleLedgerEntryRecordService(
     private val outboxPublisher: OutboxPublisher
 ) : DoubleLedgerEntryRecordUseCase {
 
+    companion object {
+        // Platform payout fee rate: 3.96%
+        private val FEE_RATE = BigDecimal("0.0396")
+    }
+
     @Transactional
     override fun recordDoubleLedgerEntry(event: PaymentConfirmedEvent) {
-        val doubleAccountsForLedger = loadAccountPort.getDoubleAccountsForLedger(FinanceType.PAYMENT_ORDER)
+        val paymentAccountsForLedger = loadAccountPort.getDoubleAccountsForLedger(FinanceType.PAYMENT_ORDER)
+        val feeAccountsForLedger = loadAccountPort.getDoubleAccountsForLedger(FinanceType.PLATFORM_FEE)
 
-        // Convert event payment orders to domain payment orders
-        val paymentOrders = event.paymentOrders.map { orderInfo ->
-            PaymentOrder(
+        // Create ledger entries for each payment order
+        val allLedgerEntries = mutableListOf<DoubleLedgerEntry>()
+
+        event.paymentOrders.forEach { orderInfo ->
+            val grossAmount = orderInfo.amount
+            val feeAmount = calculateFee(grossAmount)
+            val netAmount = grossAmount - feeAmount
+
+            // 1. Create ledger entry for net payment amount (Customer -> Merchant)
+            val paymentOrderEntry = PaymentOrder(
                 id = orderInfo.id,
-                amount = orderInfo.amount,
+                amount = netAmount,  // Net amount to merchant
                 orderId = orderInfo.orderId
+            )
+            allLedgerEntries.addAll(
+                Ledger.createDoubleLedgerEntry(paymentAccountsForLedger, listOf(paymentOrderEntry))
+            )
+
+            // 2. Create ledger entry for platform fee (Customer -> Revenue)
+            val platformFeeEntry = PlatformFee(
+                id = orderInfo.id,  // Reference same payment order ID
+                amount = feeAmount,  // Fee amount to platform
+                orderId = orderInfo.orderId
+            )
+            allLedgerEntries.addAll(
+                Ledger.createDoubleLedgerEntry(feeAccountsForLedger, listOf(platformFeeEntry))
             )
         }
 
-        val doubleLedgerEntries = Ledger.createDoubleLedgerEntry(doubleAccountsForLedger, paymentOrders)
-
-        saveDoubleLedgerEntryPort.save(doubleLedgerEntries)
+        saveDoubleLedgerEntryPort.save(allLedgerEntries)
 
         val ledgerRecordedEvent = LedgerRecordedEvent(
             aggregateId = event.orderId,
@@ -49,5 +73,16 @@ class DoubleLedgerEntryRecordService(
 
         inProcessEventBus.publish(ledgerRecordedEvent)
         outboxPublisher.publish(ledgerRecordedEvent)
+    }
+
+    /**
+     * Calculate platform fee: 3.96% of gross amount
+     * Rounds up to ensure platform doesn't lose fractional amounts
+     */
+    private fun calculateFee(grossAmount: Long): Long {
+        val feeDecimal = BigDecimal(grossAmount)
+            .multiply(FEE_RATE)
+            .setScale(0, RoundingMode.HALF_UP)
+        return feeDecimal.toLong()
     }
 }
