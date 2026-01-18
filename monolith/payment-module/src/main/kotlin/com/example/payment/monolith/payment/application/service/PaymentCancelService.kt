@@ -37,6 +37,14 @@ class PaymentCancelService(
             )
         }
 
+        if (paymentEvent.isCancellationDone()) {
+            return PaymentCancellationResult(
+                status = PaymentStatus.CANCELED,
+                canceledAt = null,
+                cancelAmount = null
+            )
+        }
+
         // 2. Validate: payment must be SUCCESS
         if (!paymentEvent.isSuccess()) {
             return PaymentCancellationResult(

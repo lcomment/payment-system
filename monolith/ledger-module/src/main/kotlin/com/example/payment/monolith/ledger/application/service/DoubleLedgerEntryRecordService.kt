@@ -30,6 +30,29 @@ class DoubleLedgerEntryRecordService(
 
     @Transactional
     override fun recordDoubleLedgerEntry(event: PaymentConfirmedEvent) {
+        recordDoubleLedgerEntryInternal(event)
+
+        val ledgerRecordedEvent = LedgerRecordedEvent(
+            aggregateId = event.orderId,
+            eventId = UUID.randomUUID().toString(),
+            occurredAt = LocalDateTime.now(),
+            orderId = event.orderId
+        )
+
+        inProcessEventBus.publish(ledgerRecordedEvent)
+        outboxPublisher.publish(ledgerRecordedEvent)
+    }
+
+    /**
+     * 오케스트레이터에서 호출 시 사용 - 이벤트 발행 없이 원장 기록만 수행
+     * 단일 트랜잭션 내에서 Payment/Wallet/Ledger 처리 시 사용
+     */
+    @Transactional
+    override fun recordDoubleLedgerEntryWithoutEvent(event: PaymentConfirmedEvent) {
+        recordDoubleLedgerEntryInternal(event)
+    }
+
+    private fun recordDoubleLedgerEntryInternal(event: PaymentConfirmedEvent) {
         val paymentAccountsForLedger = loadAccountPort.getDoubleAccountsForLedger(FinanceType.PAYMENT_ORDER)
         val feeAccountsForLedger = loadAccountPort.getDoubleAccountsForLedger(FinanceType.PLATFORM_FEE)
 
@@ -63,16 +86,6 @@ class DoubleLedgerEntryRecordService(
         }
 
         saveDoubleLedgerEntryPort.save(allLedgerEntries)
-
-        val ledgerRecordedEvent = LedgerRecordedEvent(
-            aggregateId = event.orderId,
-            eventId = UUID.randomUUID().toString(),
-            occurredAt = LocalDateTime.now(),
-            orderId = event.orderId
-        )
-
-        inProcessEventBus.publish(ledgerRecordedEvent)
-        outboxPublisher.publish(ledgerRecordedEvent)
     }
 
     /**

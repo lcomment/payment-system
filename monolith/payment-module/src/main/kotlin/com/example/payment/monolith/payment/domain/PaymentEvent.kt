@@ -62,6 +62,10 @@ data class PaymentEvent(
 
     fun isCancellationDone(): Boolean = isCancellationDone
 
+    fun restorePaymentDone(value: Boolean) {
+        isPaymentDone = value
+    }
+
     fun confirmWalletReversal() {
         paymentOrders.forEach { it.confirmWalletReversal() }
     }
@@ -86,5 +90,9 @@ data class PaymentEvent(
 
     private fun allReversalsDone(): Boolean {
         return paymentOrders.all { it.isWalletReversed() && it.isLedgerReversed() }
+    }
+
+    fun restoreCancellationDone(value: Boolean) {
+        isCancellationDone = value
     }
 }

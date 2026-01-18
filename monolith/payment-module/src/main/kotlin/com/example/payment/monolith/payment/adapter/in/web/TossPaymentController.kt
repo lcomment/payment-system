@@ -7,7 +7,7 @@ import com.example.payment.monolith.payment.adapter.`in`.web.response.ApiRespons
 import com.example.payment.monolith.payment.application.port.`in`.PaymentCancelCommand
 import com.example.payment.monolith.payment.application.port.`in`.PaymentCancelUseCase
 import com.example.payment.monolith.payment.application.port.`in`.PaymentConfirmCommand
-import com.example.payment.monolith.payment.application.port.`in`.PaymentConfirmUseCase
+import com.example.payment.monolith.payment.application.port.`in`.PaymentOrchestratorUseCase
 import com.example.payment.monolith.payment.domain.PaymentCancellationResult
 import com.example.payment.monolith.payment.domain.PaymentConfirmationResult
 import org.springframework.http.HttpStatus
@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/v1/toss")
 class TossPaymentController(
-    private val paymentConfirmUseCase: PaymentConfirmUseCase,
+    private val paymentOrchestratorUseCase: PaymentOrchestratorUseCase,
     private val paymentCancelUseCase: PaymentCancelUseCase
 ) {
 
@@ -33,7 +33,7 @@ class TossPaymentController(
             amount = request.amount.toLong()
         )
 
-        val result = paymentConfirmUseCase.confirm(command)
+        val result = paymentOrchestratorUseCase.confirmAndProcess(command)
 
         return ResponseEntity.ok()
             .body(ApiResponse.with(HttpStatus.OK, "", result))

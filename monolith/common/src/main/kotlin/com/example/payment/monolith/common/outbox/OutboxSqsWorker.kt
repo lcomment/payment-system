@@ -52,8 +52,12 @@ class OutboxSqsWorker(
     private fun determineQueueName(eventType: String): String {
         return when (eventType) {
             "PaymentConfirmedEvent" -> "payment-queue"
+            "PaymentCanceledEvent" -> "payment-queue"
             "WalletSettledEvent" -> "wallet-queue"
+            "WalletRefundedEvent" -> "wallet-queue"
             "LedgerRecordedEvent" -> "ledger-queue"
+            "LedgerReversedEvent" -> "ledger-queue"
+            "CancelPaymentCommand" -> "payment-cancel-queue"
             else -> throw IllegalArgumentException("Unknown event type: $eventType")
         }
     }

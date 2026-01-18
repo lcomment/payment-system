@@ -31,6 +31,29 @@ class SettlementService(
 
     @Transactional
     override fun processSettlement(event: PaymentConfirmedEvent) {
+        processSettlementInternal(event)
+
+        val walletSettledEvent = WalletSettledEvent(
+            aggregateId = event.orderId,
+            eventId = UUID.randomUUID().toString(),
+            occurredAt = LocalDateTime.now(),
+            orderId = event.orderId
+        )
+
+        inProcessEventBus.publish(walletSettledEvent)
+        outboxPublisher.publish(walletSettledEvent)
+    }
+
+    /**
+     * 오케스트레이터에서 호출 시 사용 - 이벤트 발행 없이 정산 처리만 수행
+     * 단일 트랜잭션 내에서 Payment/Wallet/Ledger 처리 시 사용
+     */
+    @Transactional
+    override fun processSettlementWithoutEvent(event: PaymentConfirmedEvent) {
+        processSettlementInternal(event)
+    }
+
+    private fun processSettlementInternal(event: PaymentConfirmedEvent) {
         // Convert event payment orders to domain payment orders with fee calculation
         val paymentOrders = event.paymentOrders.map { orderInfo ->
             val grossAmount = orderInfo.amount
@@ -52,16 +75,6 @@ class SettlementService(
         val updatedWallets = getUpdatedWallets(paymentOrdersBySellerId)
 
         saveWalletPort.save(updatedWallets)
-
-        val walletSettledEvent = WalletSettledEvent(
-            aggregateId = event.orderId,
-            eventId = UUID.randomUUID().toString(),
-            occurredAt = LocalDateTime.now(),
-            orderId = event.orderId
-        )
-
-        inProcessEventBus.publish(walletSettledEvent)
-        outboxPublisher.publish(walletSettledEvent)
     }
 
     private fun getUpdatedWallets(paymentOrdersBySellerId: Map<Long, List<PaymentOrder>>): List<Wallet> {

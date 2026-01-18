@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component
 class PaymentMapper {
 
     fun mapToDomainEntity(entity: PaymentEventEntity): PaymentEvent {
-        return PaymentEvent(
+        val paymentEvent = PaymentEvent(
             id = entity.id,
             buyerId = entity.buyerId,
             orderName = entity.orderName,
@@ -19,10 +19,13 @@ class PaymentMapper {
             approvedAt = entity.approvedAt,
             paymentOrders = entity.paymentOrders.map { mapToDomainOrder(it) },
         )
+        paymentEvent.restorePaymentDone(entity.isPaymentDone)
+        paymentEvent.restoreCancellationDone(entity.isCancellationDone)
+        return paymentEvent
     }
 
     private fun mapToDomainOrder(entity: PaymentOrderEntity): PaymentOrder {
-        return PaymentOrder(
+        val paymentOrder = PaymentOrder(
             id = entity.id,
             paymentEventId = entity.paymentEvent.id,
             sellerId = entity.sellerId,
@@ -31,6 +34,13 @@ class PaymentMapper {
             amount = entity.amount,
             paymentStatus = entity.paymentStatus,
         )
+        paymentOrder.restoreUpdateFlags(
+            ledgerUpdated = entity.isLedgerUpdated,
+            walletUpdated = entity.isWalletUpdated,
+            ledgerReversed = entity.isLedgerReversed,
+            walletReversed = entity.isWalletReversed
+        )
+        return paymentOrder
     }
 
     fun mapToJpaEntity(domain: PaymentEvent): PaymentEventEntity {

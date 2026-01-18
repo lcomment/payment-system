@@ -37,4 +37,16 @@ data class PaymentOrder(
     fun confirmLedgerReversal() {
         isLedgerReversed = true
     }
+
+    fun restoreUpdateFlags(
+        ledgerUpdated: Boolean,
+        walletUpdated: Boolean,
+        ledgerReversed: Boolean,
+        walletReversed: Boolean
+    ) {
+        isLedgerUpdated = ledgerUpdated
+        isWalletUpdated = walletUpdated
+        isLedgerReversed = ledgerReversed
+        isWalletReversed = walletReversed
+    }
 }
